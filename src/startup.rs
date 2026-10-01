@@ -12,7 +12,7 @@ use crate::routes::{
     asm_v1, greet, heartbeat, lbheartbeat, self_profiles_index, self_profiles_latest,
     symbolicate_v5, version,
 };
-use crate::symbol_manager::create_symbol_manager_and_quota_manager;
+use crate::symbol_manager::{create_quota_manager, create_symbol_manager};
 
 pub fn run(
     listener: TcpListener,
@@ -21,7 +21,9 @@ pub fn run(
     let workers = settings.server.workers;
     let self_profiles_dir: web::Data<Option<PathBuf>> =
         web::Data::new(settings.self_profiles.as_ref().map(|s| s.dir.clone()));
-    let (symbol_manager, quota_manager) = create_symbol_manager_and_quota_manager(settings);
+    let quota_manager = create_quota_manager(&settings);
+    let quota_manager_notifiers: Vec<_> = quota_manager.iter().map(|qm| qm.notifier()).collect();
+    let symbol_manager = create_symbol_manager(&settings, quota_manager_notifiers);
     let app_data = web::Data::new(Arc::new(symbol_manager));
     let mut server = HttpServer::new(move || {
         let cors = Cors::default()
