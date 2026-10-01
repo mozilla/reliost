@@ -25,27 +25,18 @@ pub struct MappingFileId {
 }
 
 impl MappingFileId {
-    /// Validates and normalizes the identifier. The UUID can be given with or
-    /// without dashes, in any case.
+    /// Validates the identifier. Only the lowercase dashed form is accepted.
     pub fn new(uuid: &str) -> Result<Self, ProguardError> {
-        let hex: String = uuid
-            .chars()
-            .filter(|c| *c != '-')
-            .map(|c| c.to_ascii_lowercase())
-            .collect();
-        if hex.len() != 32 || !hex.chars().all(|c| c.is_ascii_hexdigit()) {
+        let is_valid = uuid.len() == 36
+            && uuid.bytes().enumerate().all(|(i, b)| match i {
+                8 | 13 | 18 | 23 => b == b'-',
+                _ => matches!(b, b'0'..=b'9' | b'a'..=b'f'),
+            });
+        if !is_valid {
             return Err(ProguardError::InvalidUuid(uuid.to_owned()));
         }
-        let normalized_uuid = format!(
-            "{}-{}-{}-{}-{}",
-            &hex[0..8],
-            &hex[8..12],
-            &hex[12..16],
-            &hex[16..20],
-            &hex[20..32]
-        );
         Ok(Self {
-            uuid: normalized_uuid,
+            uuid: uuid.to_owned(),
         })
     }
 
@@ -330,23 +321,26 @@ mod tests {
     use super::*;
 
     #[test]
-    fn mapping_file_id_normalizes_uuid() {
-        for uuid in [
-            "fe506e08-58e3-3f15-9117-67ccb4d01f19",
-            "FE506E08-58E3-3F15-9117-67CCB4D01F19",
-            "FE506E0858E33F15911767CCB4D01F19",
-        ] {
-            let id = MappingFileId::new(uuid).unwrap();
-            assert_eq!(
-                id.url_path(),
-                "fe506e08-58e3-3f15-9117-67ccb4d01f19/mapping.txt"
-            );
-        }
+    fn mapping_file_id_accepts_lowercase_dashed_uuid() {
+        let id = MappingFileId::new("fe506e08-58e3-3f15-9117-67ccb4d01f19").unwrap();
+        assert_eq!(
+            id.url_path(),
+            "fe506e08-58e3-3f15-9117-67ccb4d01f19/mapping.txt"
+        );
     }
 
     #[test]
     fn mapping_file_id_rejects_bad_input() {
-        for uuid in ["", "FE506E08", "ZZ506E0858E33F15911767CCB4D01F19", "../.."] {
+        for uuid in [
+            "",
+            "fe506e08",
+            "FE506E08-58E3-3F15-9117-67CCB4D01F19",
+            "fe506e0858e33f15911767ccb4d01f19",
+            "zz506e08-58e3-3f15-9117-67ccb4d01f19",
+            "fe506e08-58e3-3f15-9117-67ccb4d01f1-",
+            "fe506e0858-e3-3f15-9117-67ccb4d01f19",
+            "../..",
+        ] {
             assert!(
                 matches!(MappingFileId::new(uuid), Err(ProguardError::InvalidUuid(_))),
                 "{uuid:?} should be rejected"

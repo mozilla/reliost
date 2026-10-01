@@ -15,6 +15,13 @@ servers = [
 ]
 cache_dir = "./cache/symbols/windows/"
 
+# Servers from which we can download Android R8/ProGuard mapping.txt files.
+# Files are requested from <server>/<proguard uuid>/mapping.txt, with the UUID
+# written in lowercase with dashes.
+[proguard]
+servers = []
+cache_dir = "./cache/symbols/proguard/"
+
 # Settings for automatic file deletion
 [quota]
 managed_dir = "./cache/symbols"

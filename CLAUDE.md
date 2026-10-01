@@ -31,6 +31,7 @@ Configuration priority: Environment variables > Environment-specific config > Ba
 
 - `/symbolicate/v5` - Main symbolication endpoint (POST)
 - `/asm/v1` - Assembly code retrieval endpoint (POST)
+- `/deobfuscate/java/v1` - Java stack frame deobfuscation using Android R8/ProGuard mapping files (POST). The request and response format is documented in `src/proguard/api.rs`.
 - `/__heartbeat__`, `/__lbheartbeat__`, `/__version__` - Dockerflow health checks
 
 ## Development Commands
@@ -70,5 +71,6 @@ The server can fetch symbols from multiple sources configured in `configuration/
 - Breakpad symbols from configured servers (e.g., Mozilla's symbol server)
 - Windows symbols from Microsoft's symbol server
 - Local symbol directories
+- Android R8/ProGuard `mapping.txt` files from the `[proguard]` servers, from `<server>/<proguard uuid>/mapping.txt` (lowercase, dashed UUID). They're converted into `ProguardCache` files on download.
 
 Symbols are cached locally in `./cache/symbols/` with automatic cleanup managed by the quota system.
