@@ -19,6 +19,7 @@ fn spawn_app() -> (String, JoinHandle<Result<(), std::io::Error>>) {
             workers: None,
         },
         symbols: None,
+        proguard: None,
         quota: None,
         self_profiles: None,
     };

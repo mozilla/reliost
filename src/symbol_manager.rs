@@ -6,7 +6,7 @@ use wholesym::{SymbolManager, SymbolManagerConfig};
 use crate::configuration::{QuotaSettings, Settings};
 use crate::symbol_manager_observer::QuotaManagingSymbolManagerObserver;
 
-const USER_AGENT: &str = concat!(
+pub const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
     env!("CARGO_PKG_VERSION"),

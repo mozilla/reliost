@@ -7,6 +7,7 @@ use serde::Deserialize;
 pub struct Settings {
     pub server: ServerSettings,
     pub symbols: Option<SymbolSettings>,
+    pub proguard: Option<ProguardSettings>,
     pub quota: Option<QuotaSettings>,
     pub self_profiles: Option<SelfProfilesSettings>,
 }
@@ -47,6 +48,20 @@ pub struct WindowsSymbolSettings {
     #[serde(default)]
     pub servers: Vec<String>,
 
+    pub cache_dir: PathBuf,
+}
+
+/// Settings for Android R8/ProGuard mapping files, used by /deobfuscate/java/v1.
+#[derive(Deserialize)]
+pub struct ProguardSettings {
+    /// Base URLs from which mapping files are downloaded, tried in order.
+    /// A mapping file is requested from
+    /// `<server>/<proguard uuid>/mapping.txt`, with the UUID written in
+    /// lowercase with dashes.
+    #[serde(default)]
+    pub servers: Vec<String>,
+
+    /// The directory in which the converted mapping files are cached.
     pub cache_dir: PathBuf,
 }
 
