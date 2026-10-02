@@ -3,6 +3,7 @@ mod channel_writer;
 pub mod configuration;
 mod double_buffered_pipe;
 pub mod logging;
+pub mod proguard;
 pub mod routes;
 pub mod startup;
 pub mod symbol_manager;

@@ -1,12 +1,12 @@
 use std::sync::Arc;
 
-use samply_quota_manager::QuotaManager;
+use samply_quota_manager::{QuotaManager, QuotaManagerNotifier};
 use wholesym::{SymbolManager, SymbolManagerConfig};
 
 use crate::configuration::{QuotaSettings, Settings};
 use crate::symbol_manager_observer::QuotaManagingSymbolManagerObserver;
 
-const USER_AGENT: &str = concat!(
+pub const USER_AGENT: &str = concat!(
     env!("CARGO_PKG_NAME"),
     "/",
     env!("CARGO_PKG_VERSION"),
@@ -15,36 +15,15 @@ const USER_AGENT: &str = concat!(
     ")"
 );
 
-pub fn create_symbol_manager_and_quota_manager(
-    settings: Settings,
-) -> (SymbolManager, Option<QuotaManager>) {
-    let config = create_symbol_manager_config(&settings);
-    let quota_manager = create_quota_manager(&settings);
-
-    let quota_manager_notifiers = match &quota_manager {
-        Some(qm) => {
-            let notifier = qm.notifier();
-
-            // Enforce size and age limit now
-            notifier.trigger_eviction_if_needed();
-
-            vec![notifier]
-        }
-        None => {
-            tracing::warn!(
-                "No quota manager configured! Check [quota] in configuration/base.toml."
-            );
-            tracing::warn!(
-                "Without a quota manager, downloaded files will accumulate without bound."
-            );
-            vec![]
-        }
-    };
-
+pub fn create_symbol_manager(
+    settings: &Settings,
+    quota_manager_notifiers: Vec<QuotaManagerNotifier>,
+) -> SymbolManager {
+    let config = create_symbol_manager_config(settings);
     let mut symbol_manager = SymbolManager::with_config(config);
     let observer = QuotaManagingSymbolManagerObserver::new(quota_manager_notifiers);
     symbol_manager.set_observer(Some(Arc::new(observer)));
-    (symbol_manager, quota_manager)
+    symbol_manager
 }
 
 fn create_symbol_manager_config(settings: &Settings) -> SymbolManagerConfig {
@@ -74,13 +53,18 @@ fn create_symbol_manager_config(settings: &Settings) -> SymbolManagerConfig {
     config
 }
 
-fn create_quota_manager(settings: &Settings) -> Option<QuotaManager> {
+pub fn create_quota_manager(settings: &Settings) -> Option<QuotaManager> {
+    let Some(quota_settings) = settings.quota.as_ref() else {
+        tracing::warn!("No quota manager configured! Check [quota] in configuration/base.toml.");
+        tracing::warn!("Without a quota manager, downloaded files will accumulate without bound.");
+        return None;
+    };
     let QuotaSettings {
         managed_dir,
         db_path,
         size_limit,
         age_limit,
-    } = settings.quota.as_ref()?.clone();
+    } = quota_settings.clone();
 
     if let Err(e) = std::fs::create_dir_all(&managed_dir) {
         panic!("Could not create quota managed directory {managed_dir:?}: {e}");
@@ -95,5 +79,9 @@ fn create_quota_manager(settings: &Settings) -> Option<QuotaManager> {
 
     quota_manager.set_max_total_size(size_limit);
     quota_manager.set_max_age(age_limit.map(|d| d.as_secs()));
+
+    // Enforce size and age limit now
+    quota_manager.notifier().trigger_eviction_if_needed();
+
     Some(quota_manager)
 }
