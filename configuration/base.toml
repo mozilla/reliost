@@ -18,6 +18,7 @@ cache_dir = "./cache/symbols/windows/"
 # Servers from which we can download Android R8/ProGuard mapping.txt files.
 # Files are requested from <server>/<proguard uuid>/mapping.txt.zst, with the
 # UUID written in lowercase with dashes. The files must be zstd-compressed.
+# scripts/extract-aab-mapping.py creates them from an .aab file.
 [proguard]
 servers = []
 cache_dir = "./cache/symbols/proguard/"

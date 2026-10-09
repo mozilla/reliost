@@ -17,7 +17,8 @@ use crate::symbol_manager::USER_AGENT;
 /// (version 3) UUID of the SHA-256 hex string on the `# pg_map_hash:` line of
 /// the mapping file. This matches what the Sentry Gradle plugin computes. Once
 /// https://bugzilla.mozilla.org/show_bug.cgi?id=2079950 lands, the UUID will
-/// also be recorded in the Android package itself.
+/// also be recorded in the Android package itself. Until then,
+/// `scripts/extract-aab-mapping.py` computes it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MappingFileId {
     /// Lowercase and dashed, e.g. `fe506e08-58e3-3f15-9117-67ccb4d01f19`.
