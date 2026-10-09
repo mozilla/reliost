@@ -56,8 +56,8 @@ pub struct WindowsSymbolSettings {
 pub struct ProguardSettings {
     /// Base URLs from which mapping files are downloaded, tried in order.
     /// A mapping file is requested from
-    /// `<server>/<proguard uuid>/mapping.txt`, with the UUID written in
-    /// lowercase with dashes.
+    /// `<server>/<proguard uuid>/mapping.txt.zst`, with the UUID written in
+    /// lowercase with dashes. The file must be zstd-compressed.
     #[serde(default)]
     pub servers: Vec<String>,
 
