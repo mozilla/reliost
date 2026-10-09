@@ -13,14 +13,17 @@ use tokio::io::AsyncWriteExt;
 use crate::configuration::ProguardSettings;
 use crate::symbol_manager::USER_AGENT;
 
-/// Identifies one mapping file by the ProGuard UUID of the build, as embedded
-/// in the manifest as `io.sentry.proguard-uuid`.
+/// Identifies one mapping file by its ProGuard UUID. The UUID is the MD5-based
+/// (version 3) UUID of the SHA-256 hex string on the `# pg_map_hash:` line of
+/// the mapping file. This matches what the Sentry Gradle plugin computes. Once
+/// https://bugzilla.mozilla.org/show_bug.cgi?id=2079950 lands, the UUID will
+/// also be recorded in the Android package itself. Until then,
+/// `scripts/extract-aab-mapping.py` computes it.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct MappingFileId {
     /// Lowercase and dashed, e.g. `fe506e08-58e3-3f15-9117-67ccb4d01f19`.
-    /// This is the form used in the object name by the upload task, and the
-    /// form in the manifest. Checking it also makes the UUID safe to use as a
-    /// path component.
+    /// This is the form used in the object name on the server. Checking it also
+    /// makes the UUID safe to use as a path component.
     uuid: String,
 }
 
@@ -40,9 +43,10 @@ impl MappingFileId {
         })
     }
 
-    /// The path of the mapping file relative to a server base URL.
+    /// The path of the zstd-compressed mapping file relative to a server base
+    /// URL.
     fn url_path(&self) -> String {
-        format!("{}/mapping.txt", self.uuid)
+        format!("{}/mapping.txt.zst", self.uuid)
     }
 }
 
@@ -59,6 +63,9 @@ pub enum ProguardError {
 
     #[error("Downloading the mapping file failed: {0}")]
     Download(String),
+
+    #[error("The downloaded file could not be decompressed: {0}")]
+    Decompression(std::io::Error),
 
     #[error("The downloaded file is not a valid mapping file")]
     InvalidMapping,
@@ -180,11 +187,13 @@ impl MappingFileStore {
         }
 
         tokio::fs::create_dir_all(&dir).await?;
-        let download_path = dir.join(format!("mapping.txt.{}.download", std::process::id()));
+        let download_path = dir.join(format!("mapping.txt.zst.{}.download", std::process::id()));
+        let mapping_path = dir.join(format!("mapping.txt.{}.tmp", std::process::id()));
         let result = self
-            .download_and_convert(settings, id, &download_path, &cache_path)
+            .download_and_convert(settings, id, &download_path, &mapping_path, &cache_path)
             .await;
         let _ = tokio::fs::remove_file(&download_path).await;
+        let _ = tokio::fs::remove_file(&mapping_path).await;
         let size_in_bytes = result?;
 
         for notifier in &self.quota_manager_notifiers {
@@ -194,22 +203,28 @@ impl MappingFileStore {
         MappingFile::open(&cache_path)
     }
 
-    /// Downloads the mapping file to `download_path` and writes the converted
-    /// cache to `cache_path`. Returns the size of the cache file.
+    /// Downloads the compressed mapping file to `download_path`, decompresses
+    /// it to `mapping_path`, and writes the converted cache to `cache_path`.
+    /// Returns the size of the cache file.
     async fn download_and_convert(
         &self,
         settings: &ProguardSettings,
         id: &MappingFileId,
         download_path: &Path,
+        mapping_path: &Path,
         cache_path: &Path,
     ) -> Result<u64, ProguardError> {
         self.download(settings, id, download_path).await?;
 
         let download_path = download_path.to_owned();
+        let mapping_path = mapping_path.to_owned();
         let cache_path = cache_path.to_owned();
-        tokio::task::spawn_blocking(move || convert_mapping(&download_path, &cache_path))
-            .await
-            .map_err(|e| std::io::Error::other(e.to_string()))?
+        tokio::task::spawn_blocking(move || {
+            decompress(&download_path, &mapping_path)?;
+            convert_mapping(&mapping_path, &cache_path)
+        })
+        .await
+        .map_err(|e| std::io::Error::other(e.to_string()))?
     }
 
     /// Tries each server in order until one has the file.
@@ -274,6 +289,21 @@ impl MappingFileStore {
     }
 }
 
+/// Decompresses the zstd file at `compressed_path` into `output_path`.
+fn decompress(compressed_path: &Path, output_path: &Path) -> Result<(), ProguardError> {
+    let start = Instant::now();
+    let input = File::open(compressed_path)?;
+    let mut output = BufWriter::new(File::create(output_path)?);
+    zstd::stream::copy_decode(input, &mut output).map_err(ProguardError::Decompression)?;
+    output.into_inner().map_err(|e| e.into_error())?;
+    tracing::info!(
+        path = output_path.to_string_lossy().to_string(),
+        elapsed_in_seconds = start.elapsed().as_secs_f64(),
+        "Decompressed mapping file"
+    );
+    Ok(())
+}
+
 /// Converts the mapping.txt file at `mapping_path` into a cache file at
 /// `cache_path`. Returns the size of the cache file.
 fn convert_mapping(mapping_path: &Path, cache_path: &Path) -> Result<u64, ProguardError> {
@@ -325,7 +355,7 @@ mod tests {
         let id = MappingFileId::new("fe506e08-58e3-3f15-9117-67ccb4d01f19").unwrap();
         assert_eq!(
             id.url_path(),
-            "fe506e08-58e3-3f15-9117-67ccb4d01f19/mapping.txt"
+            "fe506e08-58e3-3f15-9117-67ccb4d01f19/mapping.txt.zst"
         );
     }
 

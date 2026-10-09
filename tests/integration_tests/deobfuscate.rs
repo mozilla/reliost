@@ -42,20 +42,23 @@ impl Drop for TempDir {
     }
 }
 
-/// Serves `MAPPING` at `/<UUID>/mapping.txt` and returns the
+/// Serves `MAPPING`, compressed with zstd, at `/<UUID>/mapping.txt.zst` and returns the
 /// server's base URL and a counter of requests for that file.
 fn spawn_mapping_server() -> (String, Arc<AtomicUsize>) {
     let listener = TcpListener::bind("127.0.0.1:0").expect("Failed to bind random port");
     let port = listener.local_addr().unwrap().port();
     let hits = Arc::new(AtomicUsize::new(0));
     let hits_for_server = hits.clone();
+    let compressed = zstd::encode_all(MAPPING.as_bytes(), 0).unwrap();
     let server = HttpServer::new(move || {
         let hits = hits_for_server.clone();
+        let compressed = compressed.clone();
         App::new().route(
-            &format!("/{UUID}/mapping.txt"),
+            &format!("/{UUID}/mapping.txt.zst"),
             web::get().to(move || {
                 hits.fetch_add(1, Ordering::SeqCst);
-                async { HttpResponse::Ok().body(MAPPING) }
+                let compressed = compressed.clone();
+                async move { HttpResponse::Ok().body(compressed) }
             }),
         )
     })

@@ -71,6 +71,6 @@ The server can fetch symbols from multiple sources configured in `configuration/
 - Breakpad symbols from configured servers (e.g., Mozilla's symbol server)
 - Windows symbols from Microsoft's symbol server
 - Local symbol directories
-- Android R8/ProGuard `mapping.txt` files from the `[proguard]` servers, from `<server>/<proguard uuid>/mapping.txt` (lowercase, dashed UUID). They're converted into `ProguardCache` files on download.
+- Android R8/ProGuard mapping files from the `[proguard]` servers, from `<server>/<proguard uuid>/mapping.txt.zst` (zstd-compressed, lowercase dashed UUID). They're decompressed and converted into `ProguardCache` files on download. `scripts/extract-aab-mapping.py` creates these files from an `.aab` file.
 
 Symbols are cached locally in `./cache/symbols/` with automatic cleanup managed by the quota system.
